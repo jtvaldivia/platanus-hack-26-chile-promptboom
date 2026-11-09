@@ -1,5 +1,5 @@
 {
   "game_name": "PLATANAZO",
-  "description": "Patea plátanos explosivos y róbaselos a VCs tiburones en un cowork de Santiago. Pivot hostil: esquiva contra una bomba, lánzala por el pasillo y arma cadenas; si la robas al último segundo, ganas un pivot perfecto. Solo roguelite con completos legendarios, café, 10 mejoras combinables y leaderboard local Top 10. Duelo local al mejor de tres, con condiciones iguales. Enemigos que patrullan, flanquean y calculan escapes. Parodia independiente del ecosistema startup chileno. Joystick + dos botones.",
+  "description": "Patea y roba plátanos explosivos en un cowork de Santiago. Ahora también puedes lanzarlos por encima de obstáculos y consultar una vista táctica. Ronda Express: disputa el maletín central y defiéndelo para cobrar vida y bonificaciones. Gráficos con mobiliario en volumen, personajes más grandes y explosiones animadas. Solo roguelite con 10 mejoras combinables y Top 10 local, o duelo al mejor de tres en igualdad de condiciones. Parodia del ecosistema startup chileno. Joystick + 4 botones.",
   "player_mode": "two_player"
 }
