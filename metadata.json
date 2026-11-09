@@ -1,5 +1,5 @@
 {
   "game_name": "PLATANAZO",
-  "description": "Patea y roba plátanos explosivos en un cowork de Santiago. Ahora también puedes lanzarlos por encima de obstáculos y consultar una vista táctica. Ronda Express: disputa el maletín central y defiéndelo para cobrar vida y bonificaciones. Gráficos con mobiliario en volumen, personajes más grandes y explosiones animadas. Solo roguelite con 10 mejoras combinables y Top 10 local, o duelo al mejor de tres en igualdad de condiciones. Parodia del ecosistema startup chileno. Joystick + 4 botones.",
+  "description": "Plátanos-bomba con mecha animada en arenas de 17×11. Seis mapas: Cowork, Terraza, Metro Pivot, Salas de Pitch, Diamante y Datacenter. Solo roguelite de ocho batches, jefes y Top 10 local; o duelo entre dos humanos con mapa inicial elegible, arenas rotativas y series de 3 o 5. Planta, patea y roba bombas, lánzalas sobre obstáculos y disputa la Ronda Express. Completos legendarios, café y parodia del ecosistema startup chileno. Joystick + 4 botones; botón 5 configura la serie en el menú.",
   "player_mode": "two_player"
 }
