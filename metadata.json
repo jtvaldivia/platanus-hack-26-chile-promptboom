@@ -1,5 +1,5 @@
 {
-  "game_name": "PROMPTBOOM",
-  "description": "De idea a unicornio, a punta de platanazos. Enruta prompts explosivos por nodos de inferencia, encadena bombas, recoge tokens y activa Overclock en una arena inspirada en Platanus, empresas de IA y startups chilenas. Cinco batches con mejoras y jefes en solitario, o duelo local al mejor de tres. Joystick + dos botones. Homenaje independiente, sin afiliación con las marcas.",
+  "game_name": "PLATANAZO",
+  "description": "Sobrevive al demo day en un cowork de Santiago: plátanos explosivos, café infinito, completos legendarios y VCs tiburones. Solo roguelite con 10 mejoras combinables, un pivot de emergencia y leaderboard Top 10 del navegador/gabinete. Duelo local al mejor de tres, con condiciones iguales. Enemigos con patrulla, persecución, intercepción y escape calculado. Parodia independiente: Platanus, Fintual, NotCo, Buk, OpenAI y Anthropic. Joystick + dos botones.",
   "player_mode": "two_player"
 }
