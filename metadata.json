@@ -1,5 +1,5 @@
 {
   "game_name": "PLATANAZO",
-  "description": "Sobrevive al demo day en un cowork de Santiago: plátanos explosivos, café infinito, completos legendarios y VCs tiburones. Solo roguelite con 10 mejoras combinables, un pivot de emergencia y leaderboard Top 10 del navegador/gabinete. Duelo local al mejor de tres, con condiciones iguales. Enemigos con patrulla, persecución, intercepción y escape calculado. Parodia independiente: Platanus, Fintual, NotCo, Buk, OpenAI y Anthropic. Joystick + dos botones.",
+  "description": "Patea plátanos explosivos y róbaselos a VCs tiburones en un cowork de Santiago. Pivot hostil: esquiva contra una bomba, lánzala por el pasillo y arma cadenas; si la robas al último segundo, ganas un pivot perfecto. Solo roguelite con completos legendarios, café, 10 mejoras combinables y leaderboard local Top 10. Duelo local al mejor de tres, con condiciones iguales. Enemigos que patrullan, flanquean y calculan escapes. Parodia independiente del ecosistema startup chileno. Joystick + dos botones.",
   "player_mode": "two_player"
 }

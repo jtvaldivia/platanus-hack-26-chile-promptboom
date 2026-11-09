@@ -57,7 +57,7 @@ class Arena extends Phaser.Scene{
  unlock(){const ctx=this.sound.context;if(ctx&&ctx.state==='suspended')ctx.resume().catch(()=>{});}
  menu(){this.clearFloats();this.state='menu';this.paused=false;this.lastInput=this.clock;this.idle=0;this.demo=false;this.fx=[];this.hideUI();releaseKeys();}
  begin(mode,demo=false){
-  this.mode=mode;this.demo=demo;this.level=1;this.score=0;this.combo=0;this.comboUntil=0;this.charge=0;this.overclock=0;this.wins=[0,0];this.round=1;this.stats={blocks:0,chains:0,bots:0};this.build={hp:mode===1?4:3,maxHp:mode===1?4:3,range:2,capacity:2,cooldown:3,perks:{}};this.revived=false;this.rerolls=1;this.savedStatus='';this.startRound();
+  this.mode=mode;this.demo=demo;this.level=1;this.score=0;this.combo=0;this.comboUntil=0;this.charge=0;this.overclock=0;this.wins=[0,0];this.round=1;this.stats={blocks:0,chains:0,bots:0,kicks:0,steals:0};this.build={hp:mode===1?4:3,maxHp:mode===1?4:3,range:2,capacity:2,cooldown:3,perks:{}};this.revived=false;this.rerolls=1;this.savedStatus='';this.startRound();
  }
  makePlayer(x,y,id){return {x,y,px:x,py:y,id,hp:this.mode===2?3:this.build.hp,shield:this.mode===1?(this.build.perks.equity||0):0,alive:true,move:0,step:.125,dir:1,inv:1.8,dash:0,range:this.build.range,capacity:this.build.capacity,moveT:0};}
  startRound(){
@@ -123,7 +123,7 @@ class Arena extends Phaser.Scene{
    if(stable&&(n.d>0||!flee)){
     const exits=DIRS.filter(([dx,dy])=>this.freeAt(fc,n.x+dx,n.y+dy,at+.01)&&this.safeAt(fc,n.x+dx,n.y+dy,at,at+step)).length;
     const dist=target?Math.abs(n.x-target.x)+Math.abs(n.y-target.y):0;
-    const score=flee?exits*.4-n.d*.2: -dist*5-n.d*.25+exits*.07;
+    const repeat=(e.trail||[]).filter(k=>k===key(n.x,n.y)).length;const score=flee?exits*.4-n.d*.2: -dist*5-n.d*.25+exits*.07-repeat*.35;
     if(score>bestScore){bestScore=score;best={step:n.first,route:n.route,safe:true,arrival:at,visited:i+1};}
     if(target&&dist===0&&n.first)return best;
    }
@@ -165,12 +165,22 @@ class Arena extends Phaser.Scene{
   const x=e.x+dx,y=e.y+dy;if(!this.walk(x,y))return false;
   if(e.id<2&&this.players.some(p=>p!==e&&p.alive&&p.x===x&&p.y===y))return false;
   if(e.id>=2&&this.enemies.some(o=>o!==e&&o.alive&&o.x===x&&o.y===y))return false;
-  e.px=e.x;e.py=e.y;e.x=x;e.y=y;e.moveT=e.step;e.dir=DIRS.findIndex(d=>d[0]===dx&&d[1]===dy);return true;
+  e.trail=e.trail||[];e.trail.push(key(e.x,e.y));if(e.trail.length>7)e.trail.shift();e.px=e.x;e.py=e.y;e.x=x;e.y=y;e.moveT=e.step;e.dir=DIRS.findIndex(d=>d[0]===dx&&d[1]===dy);return true;
+ }
+ kick(e,b,dx,dy){
+  const sx=b.x,sy=b.y;let x=sx,y=sy;
+  for(let i=0;i<3;i++){const nx=x+dx,ny=y+dy;if(!this.walk(nx,ny)||[...this.players,...this.enemies].some(o=>o.alive&&o.x===nx&&o.y===ny))break;x=nx;y=ny;}
+  if(x===sx&&y===sy)return false;
+  const stolen=b.owner!==e,perfect=stolen&&b.fuse<.45;b.x=x;b.y=y;b.fromX=sx;b.fromY=sy;b.motion=Math.min(.18,b.fuse*.8);b.motionTotal=b.motion;b.owner=e;
+  e.perfectPivot=perfect;this.stats.kicks++;if(stolen){this.stats.steals++;if(e.id===0){this.addScore(perfect?150:60);if(perfect)this.charge=Math.min(100,this.charge+20);}}
+  this.burst(OX+sx*T+T/2,OY+sy*T+T/2,this.playerColor(e),10);this.beep(perfect?1350:640,.12,'triangle');
+  if(perfect)this.float('PIVOT PERFECTO, PO',OX+x*T+T/2,OY+y*T,C.lime);
+  return true;
  }
  dash(e){
-  if(e.dash>0||!e.alive)return;let moved=false;const[dx,dy]=DIRS[e.dir];
-  const sx=e.x,sy=e.y;for(let i=0;i<2;i++)if(this.moveEntity(e,dx,dy))moved=true;else break;
-  if(moved){if(this.mode===1&&this.build.perks.peel)this.peels.push({x:sx,y:sy,left:3});this.burst(OX+sx*T+T/2,OY+sy*T+T/2,this.playerColor(e),12);e.inv=Math.max(e.inv,.3);e.dash=this.build.cooldown;e.move=.16;this.beep(760,.13,'sine');}
+  if(e.dash>0||!e.alive)return;let moved=false;const[dx,dy]=DIRS[e.dir],sx=e.x,sy=e.y;e.perfectPivot=false;
+  for(let i=0;i<2;i++){const b=this.bombAt(e.x+dx,e.y+dy);if(b&&!this.kick(e,b,dx,dy))break;if(this.moveEntity(e,dx,dy))moved=true;else break;}
+  if(moved){e.px=sx;e.py=sy;e.moveT=e.step;if(this.mode===1&&this.build.perks.peel)this.peels.push({x:sx,y:sy,left:3});this.burst(OX+sx*T+T/2,OY+sy*T+T/2,this.playerColor(e),12);e.inv=Math.max(e.inv,.3);e.dash=this.build.cooldown*(e.perfectPivot ? .5 : 1);e.move=.16;this.beep(760,.13,'sine');}
  }
  addScore(n,x,y){
   if(this.mode!==1)return;
@@ -189,7 +199,7 @@ class Arena extends Phaser.Scene{
   }
  }
  hurt(e,owner){
-  if(!e.alive||e.inv>0)return;if(e.id<2&&e.shield>0){e.shield--;e.inv=1;this.float('EQUITY ACTIVADA',OX+e.x*T,OY+e.y*T,0x9d8bff);this.beep(1100,.15);return;}e.hp--;e.inv=e.type==='boss'?.65:1.65;this.burst(OX+e.x*T+T/2,OY+e.y*T+T/2,C.coral,18);this.beep(140,.18,'square');
+  if(!e.alive||e.inv>0)return;if(e.id<2&&e.shield>0){e.shield--;e.inv=1;this.float('EQUITY ACTIVADA',OX+e.x*T,OY+e.y*T,0x9d8bff);this.beep(1100,.15);return;}e.hp--;e.hit=.14;e.inv=e.type==='boss'?.65:1.65;this.burst(OX+e.x*T+T/2,OY+e.y*T+T/2,C.coral,18);this.beep(140,.18,'square');
   if(e.hp<=0&&e.id===0&&this.mode===1&&!this.revived){this.revived=true;e.hp=2;e.inv=3;this.float('PIVOT GRATIS · SIGUES VIVO, PO',400,275,C.lime);return;}
   if(e.hp<=0){e.alive=false;if(e.id>=2){this.stats.bots++;if(this.mode===1&&this.build.perks.notmilk&&this.stats.bots%3===0){this.players[0].hp=Math.min(this.build.maxHp,this.players[0].hp+1);this.float('NOT UNA CURACIÓN',400,270,C.gold);}if(owner?.id===0)this.addScore(e.type==='boss'?1200:250,e.x,e.y);}else this.float('F EN EL CHAT',OX+e.x*T+T/2,OY+e.y*T,C.coral);}
  }
@@ -199,7 +209,7 @@ class Arena extends Phaser.Scene{
   let step=null;
   if(threat){step=this.escape(e,fc);e.intent='ESCAPE';}
   else{
-   if(e.type!=='crawler'&&e.think<=0&&this.elapsed>4){const plan=this.bombPlan(e);e.think=1.6+Math.random()*1.1;
+   if(e.type!=='crawler'&&e.think<=0&&this.elapsed>4){const plan=this.bombPlan(e);e.think=(e.type==='boss'&&e.hp<=2?1.1:1.6)+Math.random()*1.1;
     if(plan&&this.place(e)){step=plan.step;e.evadeUntil=this.elapsed+2.65;e.intent='ESCAPE';}
    }
    if(!step){
@@ -212,6 +222,7 @@ class Arena extends Phaser.Scene{
     }else{
      let goal={x:target.x,y:target.y};
      if(e.type==='hunter'||e.type==='boss'){const[dx,dy]=DIRS[target.dir];for(let i=0;i<2;i++)if(this.walk(goal.x+dx,goal.y+dy)){goal.x+=dx;goal.y+=dy;}}
+     if(e.type==='hunter'){const around=DIRS.map((_,i)=>DIRS[(i+e.id)%4]).map(([dx,dy])=>({x:goal.x+dx,y:goal.y+dy}));goal=around.find(p=>this.walk(p.x,p.y)&&this.safeAt(fc,p.x,p.y,0,e.step*2))||goal;}
      step=this.plan(e,fc,goal)?.step;e.intent=e.type==='hunter'?'CORTE':'CHASE';
     }
    }
@@ -224,15 +235,15 @@ class Arena extends Phaser.Scene{
   if(this.charge>=100){this.charge=0;this.overclock=8;this.float('CRUNCH MODE · CAFÉ INFINITO',400,260,C.teal);this.beep(1100,.35);}
   if(this.elapsed>=this.nextTide){this.tide=Math.min(5,this.tide+1);this.nextTide+=this.mode===2?10:9;this.beep(170,.3);this.float('SE ACABÓ EL RUNWAY · AL CENTRO, PO',400,280,C.blue);}
   const all=[...this.players,...this.enemies];
-  for(const e of all){e.inv=Math.max(0,e.inv-dt);e.dash=Math.max(0,e.dash-dt);e.moveT=Math.max(0,e.moveT-dt);}
+  for(const e of all){e.hit=Math.max(0,(e.hit||0)-dt);e.inv=Math.max(0,e.inv-dt);e.dash=Math.max(0,e.dash-dt);e.moveT=Math.max(0,e.moveT-dt);}
   if(this.demo){const p=this.players[0];p.think=p.think??0;p.type='bot';this.ai(p,dt,this.danger());}
   else for(const p of this.players){if(!p.alive)continue;p.move=Math.max(0,p.move-dt);const prefix='P'+(p.id+1)+'_';
    let dx=0,dy=0;if(held[prefix+'L'])dx=-1;else if(held[prefix+'R'])dx=1;else if(held[prefix+'U'])dy=-1;else if(held[prefix+'D'])dy=1;
    if((dx||dy)&&p.move<=0){p.dir=DIRS.findIndex(d=>d[0]===dx&&d[1]===dy);if(this.moveEntity(p,dx,dy))p.move=p.step;}
    if(pressed[prefix+'1'])this.place(p);if(pressed[prefix+'2'])this.dash(p);
   }
-  const haz=this.danger();for(const e of this.enemies)this.ai(e,dt,haz);
-  for(const b of this.bombs)b.fuse-=dt;for(const b of this.bombs.slice())if(b.fuse<=0&&this.bombs.includes(b))this.explode(b);
+  let haz=this.danger();for(const e of this.enemies){const count=this.bombs.length;this.ai(e,dt,haz);if(this.bombs.length!==count)haz=this.danger();}
+  for(const b of this.bombs){b.fuse-=dt;b.motion=Math.max(0,(b.motion||0)-dt);}for(const b of this.bombs.slice())if(b.fuse<=0&&this.bombs.includes(b))this.explode(b);
   for(const e of all){if(!e.alive)continue;
    const flame=this.flames.find(f=>f.x===e.x&&f.y===e.y);if(flame)this.hurt(e,flame.owner);
    if(this.wet(e.x,e.y))this.hurt(e,null);
@@ -318,7 +329,7 @@ class Arena extends Phaser.Scene{
    if(name==='banana'||name==='peel'){c.strokeStyle=d;c.lineWidth=10;c.beginPath();c.arc(16,7,14,.1,2.8);c.stroke();c.strokeStyle='#ffe17a';c.lineWidth=6;c.beginPath();c.arc(16,6,14,.1,2.8);c.stroke();r(26,5,3,5,'#78ad69');if(name==='peel'){r(12,15,4,12,'#e5b949');r(16,17,5,9,'#ffe98a');}}
   }));
  }
- stamp(texture,x,y,scale=1,depth=2,flip=false){let sprite=this.art[this.artCount];if(!sprite){sprite=this.add.image(0,0,texture);this.art.push(sprite);}this.artCount++;sprite.setTexture(texture).setPosition(x,y).setScale(scale).setDepth(depth).setFlipX(flip).setAlpha(1).setVisible(true);return sprite;}
+ stamp(texture,x,y,scale=1,depth=2,flip=false){let sprite=this.art[this.artCount];if(!sprite){sprite=this.add.image(0,0,texture);this.art.push(sprite);}this.artCount++;sprite.setTexture(texture).setPosition(x,y).setScale(scale).setDepth(depth).setFlipX(flip).setAlpha(1).clearTint().setVisible(true);return sprite;}
  item(name,x,y,s=1){this.stamp('item-'+name,x,y,s,2.5);}
  banana(x,y,s=1,c=C.gold){this.stamp('item-banana',x,y,s,1.8);}
  actor(e,now,scale=1,atX,atY){
@@ -327,9 +338,10 @@ class Arena extends Phaser.Scene{
   const index=e.id===0?this.firm:e.id===1?this.firm2:e.type==='crawler'?6:e.type==='bot'?7:e.type==='hunter'?8:9;
   const dir=e.dir===0?0:e.dir===2?2:1,s=scale*(e.type==='boss'?1.2:1);
   this.g.fillStyle(0x080915,.5);this.g.fillEllipse(x,y+16*s,28*s,9*s);
-  const img=this.stamp('actor'+index+'-'+dir+'-'+frame,x,y-4*s,s,2,e.dir===3);img.setAlpha(e.inv>0&&Math.floor(now*9)%2===0?.5:1);
+  const img=this.stamp('actor'+index+'-'+dir+'-'+frame,x,y-4*s-(moving?Math.sin(progress*Math.PI)*2:0),s,2+(atY===undefined?y/10000:0),e.dir===3);if(e.hit>0)img.setTintFill(0xfff1d5);img.setAlpha(e.inv>0&&Math.floor(now*9)%2===0?.5:1);
   if(e.shield>0){this.effects.lineStyle(2,0xb890ed,.8);this.effects.strokeCircle(x,y-3,21);}
   if(e.id<2){this.effects.fillStyle(this.playerColor(e));this.effects.fillTriangle(x-3,y-29*s,x+3,y-29*s,x,y-25*s);}
+  if(e.id>=2&&atY===undefined&&this.players.some(p=>p.alive&&Math.abs(p.x-e.x)+Math.abs(p.y-e.y)<=3))this.text('role'+e.id,x,y-31*s,e.type==='boss'?'SERIE Z':e.type==='hunter'?'VC TIBURÓN':e.type==='bot'?'GROWTH BRO':'PIVOTERO',8,this.playerColor(e));
   if(e.type==='boss'){this.effects.fillStyle(0x21152f);this.effects.fillRect(x-22,y-37,44,5);this.effects.fillStyle(C.coral);this.effects.fillRect(x-22,y-37,44*e.hp/(this.level===5?5:3),5);}
  }
  backdrop(now){
@@ -350,7 +362,7 @@ class Arena extends Phaser.Scene{
   g.lineStyle(5,C.gold,.6);g.lineBetween(295,270,505,270);g.lineBetween(400,221,400,308);
   for(const x of[310,400,490])this.banana(x,268,1.6);
   this.text('meme1',179,198,'SHIP IT, PO',12,C.lime);this.text('meme2',624,198,'¿Y EL MOAT?',12,C.coral);
-  this.text('chainlabel',400,329,'CAFÉ, COMPLETOS Y CERO RUNWAY',12,C.gold);
+  this.text('chainlabel',400,329,'② PATEA PLÁTANOS · ROBA BOMBAS · ARMA CADENAS',12,C.gold);
   this.text('faction',247,373,'P1  ‹ '+FIRMS[this.firm][0]+' ›',19,FIRMS[this.firm][1]);this.text('faction2',553,373,'P2  ‹ '+FIRMS[this.firm2][0]+' ›',19,FIRMS[this.firm2][1]);
   this.text('tagline',400,400,FIRMS[this.firm][2],11,C.muted);
   const opts=['SOLO / RUN ROGUELITE','DUELO / MEJOR DE 3','CÓMO JUGAR','LEADERBOARD'];
@@ -360,9 +372,9 @@ class Arena extends Phaser.Scene{
  }
  drawBoard(now){
   let g=this.g;this.panel(OX-8,OY-8,COLS*T+16,ROWS*T+16,0x221b31);
-  const impending=this.nextTide-this.elapsed<3;
+  const impending=this.nextTide-this.elapsed<3,palette=[[0x3a3047,0x40364b,C.lime],[0x293c43,0x31464b,C.blue],[0x41412e,0x484735,C.gold],[0x3b3049,0x453952,0xc7a0ff],[0x3b2a3c,0x453145,C.coral]][this.mode===2?(this.round-1)%5:this.level-1];
   for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
-   const px=OX+x*T,py=OY+y*T,t=this.tile(x,y);g.fillStyle((x+y)%2?0x3a3047:0x40364b);g.fillRect(px+1,py+1,T-2,T-2);
+   const px=OX+x*T,py=OY+y*T,t=this.tile(x,y);g.fillStyle(palette[(x+y)%2]);g.fillRect(px+1,py+1,T-2,T-2);if(t===0){g.fillStyle(palette[2],.035);g.fillRect(px+4,py+4,T-8,2);g.fillStyle(0x171020,.12);g.fillRect(px+4,py+T-5,T-8,2);}
    if(t===1){
     g.fillStyle(0x110f1e,.6);g.fillRect(px+4,py+10,T-3,T-8);g.fillStyle(0x645268);g.fillRoundedRect(px+2,py+1,T-6,T-6,4);g.fillStyle(0x9a7e8c);g.fillRect(px+4,py+2,T-10,4);g.fillStyle(0x473951);g.fillRect(px+4,py+29,T-10,6);
     const variant=(x*3+y+this.level)%4;
@@ -380,9 +392,11 @@ class Arena extends Phaser.Scene{
   for(const[x,y]of this.relays){const px=OX+x*T+T/2,py=OY+y*T+T/2;g.fillStyle(C.teal,.1+.05*Math.sin(now*3));g.fillCircle(px,py,18);g.lineStyle(2,C.teal,.8);g.strokeCircle(px,py,11);g.lineBetween(px-15,py,px+15,py);g.lineBetween(px,py-15,px,py+15);g.fillStyle(C.teal);g.fillRect(px-3,py-3,6,6);}
   for(const d of this.drops)if(d.safe<=0){const x=OX+d.x*T+T/2,y=OY+d.y*T+T/2+Math.sin(now*5)*2;g.fillStyle(C.gold,.12);g.fillCircle(x,y,17);this.item(d.type,x,y,.9);}
   for(const b of this.bombs){
-   const x=OX+b.x*T+T/2,y=OY+b.y*T+T/2;
-   if(b.fuse<.7)for(const[bx,by]of this.rays(b.x,b.y,b.range)){g.fillStyle(C.gold,.12+.08*Math.sin(now*20));g.fillRect(OX+bx*T+3,OY+by*T+3,T-6,T-6);}
-   this.banana(x,y-2,1+Math.sin(now*(b.fuse<.6?24:9))*.08,b.owner.id===1?C.coral:C.gold);g.lineStyle(3,b.fuse<.7?C.coral:C.teal);g.beginPath();g.arc(x,y,17,-Math.PI/2,-Math.PI/2+Math.PI*2*clamp(b.fuse/b.total,0,1),false);g.strokePath();
+   const travel=b.motion>0?b.motion/b.motionTotal:0,x=OX+(b.x+((b.fromX??b.x)-b.x)*travel)*T+T/2,y=OY+(b.y+((b.fromY??b.y)-b.y)*travel)*T+T/2,ownerCol=this.playerColor(b.owner);
+   if(travel>0){g.lineStyle(8,ownerCol,.2);g.lineBetween(OX+b.fromX*T+T/2,OY+b.fromY*T+T/2,x,y);}
+   g.fillStyle(ownerCol,.06);g.fillCircle(x,y,29);g.fillStyle(ownerCol,.06);g.fillCircle(x,y,22);
+   if(b.fuse<.7)for(const[bx,by]of this.rays(b.x,b.y,b.range)){g.fillStyle(b.owner.id<2?C.gold:C.coral,.12+.06*Math.sin(now*12));g.fillRect(OX+bx*T+3,OY+by*T+3,T-6,T-6);}
+   this.banana(x,y-2,1+Math.sin(now*(b.fuse<.6?24:9))*.08,b.owner.id===1?C.coral:C.gold);g.lineStyle(3,b.fuse<.7?C.coral:ownerCol);g.beginPath();g.arc(x,y,17,-Math.PI/2,-Math.PI/2+Math.PI*2*clamp(b.fuse/b.total,0,1),false);g.strokePath();
   }
   if(this.warning)for(const[x,y]of this.rays(this.warning.x,this.warning.y,5)){g.fillStyle(0xc7a0ff,.2+.15*Math.sin(now*16));g.fillRect(OX+x*T,OY+y*T,T,T);g.lineStyle(2,0xc7a0ff);g.strokeRect(OX+x*T+6,OY+y*T+6,T-12,T-12);}
   for(const f of this.flames){const x=OX+f.x*T,y=OY+f.y*T;g.fillStyle(C.coral,f.life/.43*.65);g.fillRoundedRect(x+1,y+1,T-2,T-2,8);g.fillStyle(C.gold,.9);g.fillRoundedRect(x+6,y+6,T-12,T-12,9);g.fillStyle(0xfff7c7);g.fillRect(x+15,y+8,12,T-16);g.fillRect(x+8,y+15,T-16,12);}
@@ -403,14 +417,14 @@ class Arena extends Phaser.Scene{
   this.text('bottom',85,571,this.mode===1?'COMBO ×'+mult+'   /   CADENAS '+this.stats.chains:'P1: WASD + U / I',12,C.ink,'left');
   this.text('action',715,571,this.mode===2?'P2: FLECHAS + R / T':'① PLÁTANO   ② PIVOT '+(p.dash>0?p.dash.toFixed(1)+'s':'LISTA'),12,C.muted,'right');
   if(this.mode===1){this.g.fillStyle(C.line);this.g.fillRoundedRect(320,565,150,8,4);this.g.fillStyle(C.teal);this.g.fillRoundedRect(320,565,Math.max(2,150*(this.overclock>0?this.overclock/8:this.charge/100)),8,4);this.text('charge',395,586,this.overclock>0?'CRUNCH '+this.overclock.toFixed(1)+'s':'CAFÉ + LUCAS → CRUNCH',9,C.teal);}
-  if(this.ready>0){this.panel(185,218,430,160,C.panel,this.effects);this.text('ready',400,250,this.mode===2?'DUELO DE STARTUPS':'BATCH '+this.level+' / 5',26,C.lime);this.text('ready2',400,291,'① PLÁTANO    ② PIVOT / ESQUIVA',16,C.ink);this.text('ready3',400,329,Math.ceil(this.ready)===1?'¡SHIP IT, PO!':this.mode===1?'4 VIDAS + 1 PIVOT GRATIS · DALE TRANQUI':'3 VIDAS CADA UNO · SIN VENTAJAS DE BUILD',13,C.gold);}else for(const id of['ready','ready2','ready3'])if(this.texts[id])this.texts[id].setVisible(false);
+  if(this.ready>0){this.panel(185,218,430,160,C.panel,this.effects);this.text('ready',400,250,this.mode===2?'DUELO DE STARTUPS':'BATCH '+this.level+' / 5',26,C.lime);this.text('ready2',400,291,'① PLÁTANO    ② PIVOT / PATADA',16,C.ink);this.text('ready3',400,329,Math.ceil(this.ready)===1?'¡SHIP IT, PO!':this.mode===1?'ESQUIVA CONTRA UN PLÁTANO PARA PATEARLO':'3 VIDAS CADA UNO · SIN VENTAJAS DE BUILD',13,C.gold);}else for(const id of['ready','ready2','ready3'])if(this.texts[id])this.texts[id].setVisible(false);
   if(this.demo){this.text('demo',400,535,'DEMO AUTOMÁTICA · CUALQUIER BOTÓN PARA JUGAR',13,C.lime);}
  }
  overlay(now){
   const g=this.g;g.fillStyle(C.bg,.96);g.fillRect(35,30,730,540);this.panel(49,44,702,512);
   if(this.state==='help'){
    this.text('h0',400,91,'SIN RUNWAY, PERO CON PALTA',29,C.lime);
-   const lines=[['01 / PLATANAZO','Botón 1: planta un plátano. Explota en 2 segundos.'],['02 / PIVOT','Botón 2: esquiva dos casillas. Cruza fuego con escudo.'],['03 / COWORK HACK','Los enchufes turquesa retransmiten el boom en cruz.'],['04 / POWER-UPS','Italiano: vida. Café: recarga. Lucas: puntos y crunch.'],['05 / RUN ROGUELITE','Elige 1 de 3 objetos entre batches. Combina sus efectos.'],['06 / SEGUNDA OPORTUNIDAD','Solo: 4 vidas y un pivot gratis si te piteas.'],['07 / DUELO','Mejor de 3. Arena simétrica, sin ventajas roguelite.']];
+   const lines=[['01 / PLATANAZO','Botón 1: planta un plátano. Explota en 2 segundos.'],['02 / PIVOT','Botón 2: esquiva y patea plátanos. ¡Roba los enemigos!'],['03 / COWORK HACK','Los enchufes turquesa retransmiten el boom en cruz.'],['04 / POWER-UPS','Italiano: vida. Café: recarga. Lucas: puntos y crunch.'],['05 / RUN ROGUELITE','Elige 1 de 3 objetos entre batches. Combina sus efectos.'],['06 / SEGUNDA OPORTUNIDAD','Solo: 4 vidas y un pivot gratis si te piteas.'],['07 / DUELO','Mejor de 3. Arena simétrica, sin ventajas roguelite.']];
    lines.forEach(([a,b],i)=>{this.text('ha'+i,86,140+i*44,a,13,i%2?C.gold:C.teal,'left');this.text('hb'+i,86,160+i*44,b,13,C.ink,'left');});
    this.text('hk',400,485,'P1 WASD + U / I    ·    P2 FLECHAS + R / T',13,C.muted);this.text('back',400,523,'BOTÓN 1 / START: VOLVER',14,C.lime);
   }else if(this.state==='records'){
@@ -425,7 +439,7 @@ class Arena extends Phaser.Scene{
   }else if(this.state==='round'){
    const winner=this.wins.some(n=>n>=2);this.text('dh',400,142,winner?'¡STARTUP UNICORNIO!':'RONDA TERMINADA',35,C.lime);this.text('dw',400,211,this.roundWinner<0?'EMPATE / AMBOS OFFLINE':'GANA '+(this.roundWinner===0?FIRMS[this.firm][0]:FIRMS[this.firm2][0]),23,this.roundWinner===0?FIRMS[this.firm][1]:FIRMS[this.firm2][1]);this.text('ds',400,300,this.wins[0]+'   :   '+this.wins[1],80,C.ink);this.text('dk',400,432,winner?'BOTÓN 1: REVANCHA  ·  START: MENÚ':'BOTÓN 1 / START: SIGUIENTE RONDA',14,C.lime);this.text('df',400,487,'MEJOR DE 3 · ARENA SIMÉTRICA · MISMAS MEJORAS',12,C.muted);
   }else{
-   this.text('eh',400,100,this.won?'UNICORNIO CON PALTA':'SE ACABÓ EL RUNWAY',33,this.won?C.lime:C.coral);this.text('es',400,174,String(this.score).padStart(6,'0'),64,C.ink);this.text('est',400,234,'BATCH '+this.level+'/5   ·   '+this.stats.bots+' BOTS   ·   '+this.stats.chains+' CADENAS',14,C.muted);
+   this.text('eh',400,100,this.won?'UNICORNIO CON PALTA':'SE ACABÓ EL RUNWAY',33,this.won?C.lime:C.coral);this.text('es',400,174,String(this.score).padStart(6,'0'),64,C.ink);this.text('est',400,234,'BATCH '+this.level+'/5   ·   '+this.stats.bots+' BOTS   ·   '+this.stats.chains+' CADENAS   ·   '+this.stats.steals+' ROBOS',14,C.muted);
    if(this.needName){this.text('nameh',400,295,'FIRMA TU RUN',17,C.gold);for(let i=0;i<3;i++){this.panel(293+i*75,327,64,72,i===this.cursor?0x304332:C.panel);this.text('letter'+i,325+i*75,362,String.fromCharCode(65+this.initials[i]),38,i===this.cursor?C.lime:C.ink);}this.text('namekeys',400,429,'↑↓ LETRA  ·  ←→ POSICIÓN  ·  BOTÓN 1 GUARDA',13,C.ink);}
    else {this.text('endmsg',400,329,this.won?'LE METISTE PALTA AL ECOSISTEMA.':'ERA UN MVP. TRANQUI. DALE OTRA RUN.',17,C.gold);this.text('endkeys',400,410,'BOTÓN 1: REINTENTAR   ·   START: MENÚ',14,C.lime);}
    this.text('endfoot',400,500,this.savedStatus||this.synergy(),11,C.muted);
@@ -488,7 +502,7 @@ class Arena extends Phaser.Scene{
    if(this.demo&&this.clock-this.resultAt>3)this.menu();
    if((this.state==='result'||this.state==='round')&&this.clock-this.resultAt>45)this.menu();
   }
-  for(const p of this.fx){p.life-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=170*dt;this.g.fillStyle(p.c,clamp(p.life/.5,0,1));this.g.fillRect(p.x,p.y,3,3);}this.fx=this.fx.filter(p=>p.life>0);
+  for(const p of this.fx){p.life-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=170*dt;this.effects.fillStyle(p.c,clamp(p.life/.5,0,1));this.effects.fillRect(p.x,p.y,3,3);}this.fx=this.fx.filter(p=>p.life>0);
   if(!this.paused&&this.clock>this.noteAt){this.noteAt=this.clock+(this.state==='play'?.23:.38);const notes=[0,7,12,7,3,10,15,10,5,12,17,12,7,14,19,14];if(this.beat%2===0)this.beep(110*Math.pow(2,notes[this.beat%16]/12),.13,'triangle',.016);if(this.state==='play'&&this.beat%4===0)this.beep(65,.1,'sine',.025);this.beat++;}
   for(const k in pressed)delete pressed[k];
  }
